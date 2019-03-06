@@ -71,3 +71,19 @@ do.plot.comp.cdb.lca <- function(n.points = 100, n.days =365*3,
   
   return(p)
 }
+
+translate.duration <- function(str.in) {
+  
+  my.choices <- c('3 meses' = '3 months',
+                  '6 meses' = '6 months',
+                  '1 ano' = '1 year',
+                  '2 anos' = '2 years',
+                  '3 anos' = '3 years',
+                  '5 anos' = '5 years',
+                  'Não Vence' = 'lifetime')
+  
+  idx <- which(str.in == my.choices)
+  
+  str.out <- names(my.choices)[idx]
+  
+}

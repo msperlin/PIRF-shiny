@@ -1,22 +1,22 @@
 library(shiny)
 library(tidyverse)
 
-source('fcts/shinny_fcts.R')
+source('fcts/shinny_fcts_reusable.R')
 
-app.title <- "IRF ver 0.6"
+app.title <- "PIRF ver 1.0"
 
 sapply(list.files('fcts/book_fcts/', full.names = TRUE), FUN = source)
 
 my.f <- list.files('server_parts/', full.names = T)
 sapply(my.f, source)
 
-my.f <- list.files('fcts', full.names = T)
+my.f <- list.files('fcts', full.names = T, pattern = '.R')
 sapply(my.f, source)
 
 my.f <- list.files('ui_parts/', full.names = T)
 sapply(my.f, source)
 
-df.TD <- read_rds('data/TD.rds')
+df.TD <- read_rds('data/main datasets/TD.rds')
 
 tab <- df.TD %>%
   group_by(asset.code, asset.code2) %>%
@@ -28,18 +28,19 @@ tab <- df.TD %>%
 df.TD <<- df.TD %>%
   filter(asset.code %in% tab$asset.code)
 
-df.ipca <<- read_rds('data/IPCA.rds') 
+df.ipca <<- read_rds('data/main datasets/IPCA.rds') 
 df.funds <<- read_rds('data/funds-shiny.rds')
 
 #unique.tickers <<- unique(df.TD$asset.code2)
-my.title <<- 'Investindo na Renda Fixa (título provisório)'
-site.shiny <- 'https://www.msperlin.com/shiny/IRF/'
+my.title <<- 'Poupando e Investindo em Renda Fixa'
+site.shiny <- 'https://www.msperlin.com/shiny/PIRF/'
+
 my.sub.caption <<- paste0(book.title, ' \uA9 Marcelo S. Perlin 2019',
                          '\n',
                          'Aplicativo disponível em ', site.shiny)
+
 my.caption <<- paste0('Dados obtidos junto ao Tesouro Nacional e BCB \n',
                      my.sub.caption)
-
 
 
 # Server
@@ -63,8 +64,8 @@ ui <- navbarPage(app.title,
                           PB_UI('PB_nm', 'PB') ),
                  tabPanel('Fundos de Renda Fixa',
                           FRF_UI('FRF_nm', 'RF') ),
-                 tabPanel('FAQ',
-                          FAQ_UI('FAQ_nm','FAQ') ),
+                 #tabPanel('FAQ',
+                #          FAQ_UI('FAQ_nm','FAQ') ),
                  tabPanel('Sobre Autor',
                           SA_UI('SA_nm','SA') )
 )

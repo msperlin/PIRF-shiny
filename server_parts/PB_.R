@@ -63,7 +63,7 @@ PB_ <- function(input, output, session) {
     df.to.plot <- bind_rows(bind_rows(df.invest.pb.1, 
                                       df.invest.pb.2,
                                       df.invest.pb.3) %>%
-                              mutate(asset.code = paste0(asset.code, ' (', 
+                              mutate(asset.code = paste0(asset.code2, ' (', 
                                                          sapply(contract.duration, 
                                                                 translate.duration), ')')),
                             df.invest.poup)
@@ -106,12 +106,11 @@ PB_ <- function(input, output, session) {
       last.date <- input$date_range[2]
     }
     
-    
-    
     tab <- get_invest_tbl(df.to.plot)
     
     if (input$slider_monthly_invest_ammount !=0) {
-      tab <- tab[ , 1:7]
+      #tab <- tab[ , 1:7]
+      tab <- tab[ , ]
     }
     
     tab

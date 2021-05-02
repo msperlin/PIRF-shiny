@@ -63,16 +63,14 @@ TD_ <- function(input, output, session) {
       my.percent.index.2 <- input$`TD_PB_2-slider_indexing`/100
     }
     
-    
-    df.invest.TD <- invest_TD(df.in = df.TD.selected ,
+    df.invest.TD <- invest_TD(TD.to.invest = input$select_td,
                               date.buy = my.date.buy,
                               date.sell = my.date.sell,
                               value.first.buy = input$slider_first_invest_ammount, 
                               value.monthly.buy = input$slider_monthly_invest_ammount)
-    
+  
     df.invest.TD <- df.invest.TD %>%
-      mutate(ref.month = as.Date(format(ref.date, '%Y-%m-01')),
-             asset.code = asset.code2) %>%
+      mutate(asset.code = asset.code2) %>%
       group_by(asset.code2, ref.month) %>%
       summarise_all(first)
     
@@ -101,7 +99,7 @@ TD_ <- function(input, output, session) {
     
     #browser()
     df.to.plot <- bind_rows(bind_rows(df.invest.pb.1) %>%
-                              mutate(asset.code = paste0(asset.code, ' (', 
+                              mutate(asset.code = paste0(asset.code2, ' (', 
                                                          sapply(contract.duration,
                                                                 translate.duration), ')')),
                             df.invest.TD,
@@ -110,24 +108,23 @@ TD_ <- function(input, output, session) {
   })
   
   
-  
   output$TD_plot_comp <- renderPlot({
     
     df.to.plot <- get_invest_data()
     
     monthly.investment <- 0
     
-    p <- ggplot(df.to.plot, aes(x = ref.month, y = port.net.value, color = asset.code)) + 
-      geom_line(size=1.5) + 
-      labs(x = '', 
+    p <- ggplot(df.to.plot, aes(x = ref.month, y = port.net.value, color = asset.code)) +
+      geom_line(size=1.5) +
+      labs(x = '',
            y = 'Valores Líquidos de Resgate',
            title = paste0('Comparação Tesouro Direto e Produtos Bancários'),
-           subtitle = paste0('- Simulação do aporte inicial de ', format.cash(input$slider_first_invest_ammount), 
+           subtitle = paste0('- Simulação do aporte inicial de ', format.cash(input$slider_first_invest_ammount),
                              ' e mensal de ', format.cash(input$slider_monthly_invest_ammount), '\n',
                              '- A reaplicação dos CDBs depende do prazo de vencimento \n',
-                             '- Todos impostos (IR, IOF) e custos (custódia B3) estão inclusos no cálculo'), 
-           caption = my.caption) + 
-      scale_x_date(breaks = pretty_breaks(10)) + 
+                             '- Todos impostos (IR, IOF) e custos (custódia B3) estão inclusos no cálculo'),
+           caption = my.caption) +
+      scale_x_date(breaks = pretty_breaks(10)) +
       scale_y_continuous(labels = format.cash) + my.theme() +
       guides(color=guide_legend(nrow=1,byrow=TRUE))
     
@@ -149,10 +146,36 @@ TD_ <- function(input, output, session) {
     tab <- get_invest_tbl(df.to.plot)
     
     if (input$slider_monthly_invest_ammount !=0) {
-      tab <- tab[ , 1:7]
+      #tab <- tab[ , 1:7]
+      tab <- tab[ , ]
     }
     
     tab
+    
+  })
+  
+  output$TD_text_graph <- renderUI({
+   
+    
+    df.to.plot <- get_invest_data()
+    
+    # get best invest
+    tab <- get_invest_tbl(df.to.plot)
+    
+    idx.best <- which.max(parse_number(tab$`Valor Bruto de Resgate`, locale = locale(decimal_mark = ',')))
+    name.best <- tab$Produto[idx.best]
+    resgate.best <- tab$`Valor Total de Resgate`[idx.best]
+    
+    tagList(
+      p('O investimento mais rentável entre todas alternativas foi o ', strong(name.best), 
+              ', com um valor de resgate líquido de ', strong(resgate.best))
+    )
+    # 
+    # 
+    # txt.out <- str_c('O melhor investimento foi o ', name.best, 
+    #                    ', com um valor de resgate líquido de ', resgate.best)
+    #                    
+    # txt.out
     
   })
   

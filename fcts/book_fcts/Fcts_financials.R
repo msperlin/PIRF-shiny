@@ -1,15 +1,40 @@
+#' Calculates tax for capital gains
+#'
+#' This function will use the current Brazilian tax rate for capital gains based
+#' on number of days of investment. See <https://blog.rico.com.vc/imposto-renda-investimentos> for details.
+#'
+#' @param n.days Number of days since investment
+#'
+#' @return A tax rate (e.g. 0.15)
+#' @export
+#'
+#' @examples
+#'
+#' print(calc.ir.rate(150))
 calc.ir.rate <- function(n.days = 1:1000) {
 
   out <- numeric(length = length(n.days))
 
   out[n.days <= 6*30] <- 0.225
   out[ (n.days > 6*30)&(n.days <= 12*30)] <- 0.20
-  out[ (n.days > 12*30)&(n.days < 24*30)] <- 0.175
+  out[ (n.days > 12*30)&(n.days <= 24*30)] <- 0.175
   out[ (n.days > 24*30)] <- 0.15
 
   return(out)
 }
 
+#' Calculates tax rate for IOF (imposto operacoes financeiras)
+#'
+#' Based on number of days, calculates the IOF rate.
+#' More details at <http://www.planalto.gov.br/ccivil_03/_Ato2007-2010/2007/Decreto/D6306.htm>
+#'
+#' @inheritParams calc.ir.rate
+#'
+#' @return A vector of tax rates (e.g. 0.50 )
+#' @export
+#'
+#' @examples
+#' print(calc.iof.rate(15))
 calc.iof.rate <- function(n.days = 1:100 ) {
 
   vec.diff <- c(0, rep(c(-4,-3,-3), 10))
@@ -26,72 +51,14 @@ calc.iof.rate <- function(n.days = 1:100 ) {
   return(iof.out)
 }
 
-my.cum.ret.TD <- function(ret.in,
-                          ticker = rep('ticker', length(ret.in)),
-                          ref.date,
-                          value.invested = 1,
-                          do.emoluments = TRUE) {
 
-  require(purrr)
-
-  unique.tickers <- unique(ticker)
-  ret.in[is.na(ret.in)] <- 0
-
-  n.obs <- length(ret.in)
-
-  my.fct <- function(ret.in, ref.date, do.emoluments) {
-
-    cum.ret.nominal <- numeric(length = length(ret.in))
-    cum.ret.liquid <- numeric(length = length(ret.in))
-    for (i in (1:n.obs)) {
-
-      ir.rate <- calc.ir.rate(i)
-
-      if (i == 1) {
-        ir.value = ir.rate*(value.invested*ret.in[i])
-        cum.ret.nominal[i] <- value.invested*(1+ret.in[i]) - ir.value
-      } else {
-
-        month.now <- lubridate::month(ref.date[i])
-
-        if ((do.emoluments)&(month.now %in% c(6,12))) { # pay emoluments
-          emolument.perc = (1+0.005)^(1/2) -1
-          emolument.value = cum.ret.nominal[i-1]*emolument.perc
-        } else {
-          emolument.value = 0
-        }
-
-        cum.ret.nominal[i] <- cum.ret.nominal[i-1]*(1+ret.in[i]) - emolument.value
-
-        # pay IR
-        ir.value = ir.rate*(cum.ret.nominal[i] - value.invested)
-        cum.ret.liquid[i] <- cum.ret.nominal[i] - ir.value
-      }
-
-    }
-
-    # do IR TD
-    #ir.rate <- calc.ir.rate(n.obs)
-    #last.value = cum.ret.out[length(cum.ret.out)]
-    #cum.ret.out[length(cum.ret.out)] <- last.value - (cum.ret.out[length(cum.ret.out)] - value.invested)*ir.rate
-
-    return(cum.ret.liquid)
-
-  }
-
-  l <- pmap(.l = list(ret.in = split(x = ret.in, f = ticker),
-                      ref.date = split(x = ref.date, f = ticker),
-                      do.emoluments = rep(do.emoluments, length(unique.tickers)) ),
-            .f = my.fct)
-
-  cum.ret <- do.call(what = c, args = l)
-
-  return(cum.ret)
-
-}
-
-
-my.cum.ret.funds <- function(ret.in, ticker, ref.date, value.invested = 1,
+my.cum.ret.funds <- function(ret.in,
+                             ticker,
+                             ref.date,
+                             comecota.perc = 0.15,
+                             value.invested = 1,
+                             monthly.purchases = 0,
+                             cost.carregamento = 0,
                              do.come.cota = TRUE) {
 
   require(purrr)
@@ -116,8 +83,6 @@ my.cum.ret.funds <- function(ret.in, ticker, ref.date, value.invested = 1,
 
         if ((do.come.cota)&(month.now %in% c(6,12))) { # pay comecota
 
-          comecota.perc = 0.15
-
           if (i == 6) {
             cum.ret.comp <- value.invested
           } else {
@@ -126,16 +91,33 @@ my.cum.ret.funds <- function(ret.in, ticker, ref.date, value.invested = 1,
 
           comecota.value = (cum.ret.out[i] - cum.ret.comp)*comecota.perc
 
-          cum.ret.out[i] <- cum.ret.out[i-1]*(1+ret.in[i]) - comecota.value
+          cum.ret.out[i] <- cum.ret.out[i-1]*(1+ret.in[i]) -
+            comecota.value +
+            monthly.purchases*(1-cost.carregamento)
         }
       }
 
     }
 
+    # last come cota adjustement (paying come-cota for last returns)
+    if (do.come.cota) {
+      if (n.obs >= 6) {
+        per.last <- n.obs %% 6
+      } else {
+        per.last <- n.obs- 1
+      }
+
+      cum.ret.out[n.obs] <- cum.ret.out[n.obs] -
+        (cum.ret.out[n.obs] - cum.ret.out[n.obs-per.last])*comecota.perc
+    }
+
+    # do iof
+    iof.tab <- calc.iof.rate(1:n.obs)
+    cum.ret.out <- cum.ret.out - (cum.ret.out - value.invested)*iof.tab
+
     return(cum.ret.out)
 
   }
-
 
   l <- pmap(.l = list(ret.in = split(x = ret.in, f = ticker),
                       ref.date = split(x = ref.date, f = ticker),
@@ -148,23 +130,153 @@ my.cum.ret.funds <- function(ret.in, ticker, ref.date, value.invested = 1,
 
 }
 
-invest_TD <- function(df.in,
-                      date.buy = min(df.in$ref.date),
-                      date.sell = max(df.in$ref.date),
+#' Simulation of a bond investment (Tesouro Direto)
+#'
+#' This function will simulate an investment in a bond from Tesouro Direto (Brazilian government bonds)
+#' and, based on inputs, calculate the nominal and net value of the portfolio. All costs, including
+#' tax rate and operations costs are incorporated in the analysis
+#'
+#' @param TD.to.invest Type/name of bond to invest (default = "Tesouro IPCA+ 2024"). See
+#'   function available.bonds() for a list of bonds.
+#' @param type.invest Defines the rules for investing ('firstday', 'minprice', 'lastprice').
+#'   The 'firstday' case will always invest cash in the first business day of the month. The 'minprice'
+#'   option will invest in the lowest available price in the month. The 'maxprice' will invest in the day
+#'   with the highest price.
+#' @param date.buy Date of first buy
+#' @param date.sell Date of final sell (liquidation date)
+#' @param custody.cost.aa Annual custody cost from the exchange (B3). Default = 0.25% of investment value per year.
+#' @param value.first.buy Value ($) of first buy (default = 1)
+#' @param value.monthly.buy Value ($) of monthly purchases
+#' @param TD.file A .rds file with data from Tesouro Direto
+#'
+#' @return
+#' @export
+#'
+#' @examples
+invest_TD <- function(TD.to.invest,
+                      type.invest = 'firstday',
+                      date.buy = as.Date('2000-01-01'),
+                      date.sell = Sys.Date(),
                       custody.cost.aa = 0.0025,
                       value.first.buy = 1,
-                      value.monthly.buy = 0) {
+                      value.monthly.buy = 0,
+                      TD.file = 'data/main datasets/TD.rds') {
 
   require(lubridate)
   require(tidyverse)
+
+  # check args
+  if (!file.exists(TD.file)) {
+      stop(paste0('File', TD.file, ' doesnt exist..') )
+  }
+
+  df.TD <- read_rds(TD.file)
+
+  available.TDs <- unique(df.TD$asset.code2)
+
+  if (!(TD.to.invest %in% available.TDs)) {
+    my.msg <-  paste0('Cant find ', TD.to.invest, ' in database.\n',
+                      'Available TDs:\n\n', paste0(available.TDs,
+                                                   collapse = '\n '))
+
+    cat(my.msg)
+    stop(paste0('Cant find ', TD.to.invest, ' in database.\n'))
+  }
+
+  # build month vec
+  df.in <- df.TD %>%
+    filter(asset.code2 == TD.to.invest,
+           ref.date >= date.buy,
+           ref.date <= date.sell) %>%
+    mutate(ref.month = as.Date(format(ref.date, '%Y-%m-01')))
+
+  # check days of purchases
+  if (type.invest == 'firstday') {
+
+    df.purchase.dates <- df.in %>%
+      group_by(ref.month) %>%
+      summarise(purchase.dates = min(ref.date))
+
+  } else if (type.invest == 'minprice') {
+
+    df.purchase.dates <- df.in %>%
+      group_by(ref.month) %>%
+      summarise(min.price = min(price.bid),
+                purchase.dates = ref.date[which.min(price.bid)])
+
+  } else if (type.invest == 'maxprice') {
+    df.purchase.dates <- df.in %>%
+      group_by(ref.month) %>%
+      summarise(min.price = min(price.bid),
+                purchase.dates = ref.date[which.max(price.bid)])
+  }
+
+  # do first buy
+  df.invest.first <- invest_single_TD(df.in = df.in,
+                                      id.operation = 0, # first buy
+                                      date.buy = min(df.in$ref.date),
+                                      date.sell = max(df.in$ref.date),
+                                      custody.cost.aa = custody.cost.aa,
+                                      value.buy = value.first.buy)
+
+  # do all other buys
+  if (value.monthly.buy != 0) {
+
+    l.arg <- list(df.in = list(df.in),
+                  id.operation = 1:nrow(df.purchase.dates),
+                  date.buy = df.purchase.dates$purchase.dates,
+                  date.sell = max(df.in$ref.date),
+                  value.buy = value.monthly.buy)
+
+    l.out <- pmap(.l = l.arg, .f = invest_single_TD)
+    df.invest.others <- bind_rows(l.out)
+
+  } else {
+
+    df.invest.others <- tibble()
+
+  }
+
+  # bind first and others
+  df.invest <- bind_rows(df.invest.first,
+                         df.invest.others)
+
+  # group by date and get portfolio value
+  tab.invest <- df.invest %>%
+    group_by(id, asset.code2, ref.month) %>%
+    summarise_all(.funs = last) %>%
+    group_by(asset.code2, ref.month) %>%
+    summarise(port.net.value = sum(port.net.value),
+              port.nominal.value = sum(port.nominal.value),
+              cost.IOF = sum(cost.IOF),
+              cost.IR = sum(cost.IR),
+              value.purchases = last(cost.portfolio) ) %>%
+    ungroup() %>%
+    mutate(type.invest = type.invest)
+
+  
+  return(tab.invest)
+
+}
+
+invest_single_TD <- function(df.in,
+                             id.operation = NA,
+                             date.buy = min(df.in$ref.date),
+                             date.sell = max(df.in$ref.date),
+                             custody.cost.aa = 0.0025,
+                             value.buy = 1) {
+
+  require(lubridate)
+  require(tidyverse)
+
+  if (value.buy == 0) return(tibble())
 
   custody.cost.as <- (1 + custody.cost.aa)^(1/2) - 1
 
   df.in <- df.in %>%
     filter(ref.date >= date.buy,
-           ref.date <= date.sell)
-
-  df.in <- ungroup(df.in)
+           ref.date <= date.sell) %>%
+    ungroup()
 
   df.firstdates <- df.in %>%
     group_by(ref.month = as.Date(format(ref.date, '%Y-%m-01'))) %>%
@@ -172,7 +284,9 @@ invest_TD <- function(df.in,
     mutate(month = month(ref.month))
 
   df.refdate <- df.firstdates %>%
-    filter(month %in% c(7,1))
+    filter(month %in% c(7,1)) %>%
+    slice(-1) # remove first month
+
 
   # calculate B3 custody costs
   df.in$custody.cost <- 0
@@ -187,179 +301,48 @@ invest_TD <- function(df.in,
 
   # do purchases
   df.in$value.purchases <- 0
-  idx <- df.in$ref.date %in% df.firstdates$first.date
-  df.in$value.purchases[idx] <- value.monthly.buy
+  df.in$value.purchases[1] <- value.buy
 
-  df.in$value.purchases[1] <-value.first.buy
-
-  df.in <- invest_build_port(df.in)
+  df.in <- invest_build_port(df.in) %>%
+    mutate(id = id.operation)
 
   return(df.in)
 
 }
 
-invest_single_cdb_lca <- function(type.invest = 'CDB',
-                           type.indexing = 'CDI',
-                           percent.index = dplyr::if_else(type.indexing == 'CDI', 1, 0.05),
-                           date.buy = as.Date('2010-01-01'),
-                           date.sell = Sys.Date(),
-                           value.first.buy = 1,
-                           value.monthly.buy = 0) {
-
-  require(tidyverse)
-
-  if ( !(type.invest %in% c('CDB', 'LCA')) ) {
-    stop('type.invest should be "CDB" or "LCA"')
-  }
-
-  if ( !(type.indexing %in% c('CDI', 'IPCA')) ) {
-    stop('type.indexing should be "CDI" or "IPCA"')
-  }
-
-  if (type.indexing == 'CDI') {
-    my.subname <- paste0(scales::percent(percent.index), ' CDI')
-  } else {
-    my.subname <- paste0('IPCA + ', scales::percent(percent.index))
-  }
-
-  if (type.invest == 'LCA') {
-    do.ir = FALSE
-    my.name <- paste0('LCA/LCI/LC ',
-                      my.subname)
-  } else if (type.invest == 'CDB') {
-    do.ir = TRUE
-    my.name <- paste0('CDB ',
-                      my.subname)
-  }
-
-  if (type.indexing == 'CDI') {
-    df.invest <- read_rds('data/CDI.rds') %>%
-      rename(ref.month = date,
-             index.nom.ret = value) %>%
-      filter(ref.month >= date.buy,
-             ref.month <= date.sell) %>%
-      mutate(percent.index = percent.index,
-             nom.ret = percent.index*index.nom.ret/100)
-  } else {
-    df.invest <- read_rds('data/IPCA.rds') %>%
-      rename(ref.month = date,
-             index.nom.ret = value) %>%
-      select(-IPCA.am, - IPCA.aa) %>%
-      filter(ref.month >= date.buy,
-             ref.month <= date.sell) %>%
-      mutate(percent.index = percent.index,
-             nom.ret = index.nom.ret/100 + ( (1+percent.index)^(1/12) -1))
-  }
-
-
-  # calculate B3 custody costs (no custody costs for CDB)
-  df.invest$custody.cost <- 0
-
-  df.invest <- df.invest %>%
-    mutate(asset.code = my.name,
-           n.days = as.numeric(df.invest$ref.month - min(df.invest$ref.month)),
-           ir.rate = if_else(rep(do.ir, nrow(df.invest)), calc.ir.rate(n.days), 0),
-           iof.rate = calc.iof.rate(n.days),
-           price.bid = cumprod(1 + nom.ret))
-
-  # do purchases
-  df.invest$value.purchases <- 0
-  idx <- df.invest$ref.month %in% df.invest$ref.month
-  df.invest$value.purchases[idx] <- value.monthly.buy
-  df.invest$value.purchases[1] <-value.first.buy
-
-
-  df.invest <- invest_build_port (df.invest)
-
-
-  return(df.invest)
-
-}
-
-
-
-invest_cdb_lca <- function(type.invest = 'CDB',
-                           type.indexing = 'CDI',
-                           percent.index = dplyr::if_else(type.indexing == 'CDI', 1, 0.05),
-                           date.buy = as.Date('2005-01-01'),
-                           date.sell = as.Date('2018-12-31'),
-                           contract.duration = 'lifetime',
-                           value.first.buy = 1,
-                           value.monthly.buy = 0) {
-
-  require(tidyverse)
-
-  # set date vec for purchases
-  if (contract.duration == 'lifetime') {
-    date.repurchases <- c(date.buy, date.sell)
-  } else {
-    date.repurchases <- unique(c(seq(date.buy, date.sell,
-                                     by = contract.duration),
-                                 date.sell))
-  }
-
-
-  temp.value.first.buy <- value.first.buy
-
-  df.invest.out <- tibble()
-  for (i.repurchase in seq(length(date.repurchases) -1)) {
-
-    if (i.repurchase == 1) {
-      temp.date.buy <- date.repurchases[i.repurchase]
-    } else {
-      temp.date.buy <- date.repurchases[i.repurchase] + 1
-    }
-
-    temp.date.sell <- date.repurchases[i.repurchase+1]
-
-    df.invest.temp <- invest_single_cdb_lca(type.invest = type.invest,
-                                            type.indexing = type.indexing,
-                                            percent.index = percent.index,
-                                            date.buy = temp.date.buy,
-                                            date.sell = temp.date.sell,
-                                            value.first.buy = temp.value.first.buy,
-                                            value.monthly.buy = value.monthly.buy) %>%
-      mutate(contract.duration = contract.duration )
-
-    temp.value.first.buy <- last(df.invest.temp$port.net.value)
-
-    df.invest.out <- bind_rows(df.invest.out,
-                               df.invest.temp)
-  }
-
-  return(df.invest.out)
-
-}
-
-
 invest_poup <- function(date.buy = as.Date('2010-01-01'),
                         date.sell = Sys.Date(),
                         value.first.buy = 1,
-                        value.monthly.buy = 0) {
+                        value.monthly.buy = 0,
+                        poup.file = 'data/main datasets/Poupanca.rds') {
 
   require(tidyverse)
 
   my.name <- 'Caderneta de Poupança'
 
-  df.invest <- read_rds('data/Poupanca.rds') %>%
-      rename(ref.month = date,
-             index.nom.ret = value) %>%
-      filter(ref.month >= date.buy,
-             ref.month <= date.sell) %>%
-      mutate(percent.index = NA,
-             nom.ret = index.nom.ret)
+  df.invest <- read_rds(poup.file) %>%
+    rename(ref.month = date,
+           index.nom.ret = value) %>%
+    filter(ref.month >= date.buy,
+           ref.month <= date.sell) %>%
+    mutate(percent.index = NA,
+           nom.ret = index.nom.ret)
 
   do.ir <- FALSE
 
-  # calculate B3 custody costs (no custody costs for CDB)
+  # calculate B3 custody costs (no custody costs for poupança)
   df.invest$custody.cost <- 0
 
   df.invest <- df.invest %>%
     mutate(asset.code = my.name,
+           asset.code2 = my.name,
            n.days = as.numeric(df.invest$ref.month - min(df.invest$ref.month)),
-           ir.rate = if_else(rep(do.ir, nrow(df.invest)), calc.ir.rate(n.days), 0),
+           ir.rate = if_else(rep(do.ir,
+                                 nrow(df.invest)),
+                             calc.ir.rate(n.days), 0),
            iof.rate = calc.iof.rate(n.days),
-           price.bid = cumprod(1 + nom.ret))
+           price.bid = cumprod(1 + nom.ret),
+           price.ask = price.bid)
 
   # do purchases
   df.invest$value.purchases <- 0
@@ -375,14 +358,18 @@ invest_poup <- function(date.buy = as.Date('2010-01-01'),
 
 invest_build_port <- function(df.invest) {
   df.invest <- df.invest %>%
-    mutate(qtd.purchased = value.purchases/price.bid,
+    mutate(qtd.purchased = value.purchases/price.ask, # buy at ask price
            cost.portfolio = cumsum(value.purchases),
            qtd = cumsum(qtd.purchased),
-           port.nominal.value = qtd*price.bid,
+           port.nominal.value = qtd*price.bid, # sell at bid price
            pm = cost.portfolio/qtd,
+           cost.custody = port.nominal.value*custody.cost,
+           cost.IOF = iof.rate*(price.bid - pm)*qtd,
+           cost.IR = ir.rate*( (price.bid - pm)*qtd - cost.IOF),
            port.net.value = port.nominal.value -
-             port.nominal.value*(custody.cost) -
-             (ir.rate+iof.rate)*(price.bid - pm)*qtd)
+             cost.custody -
+             cost.IOF -
+             cost.IR)
 
   return(df.invest)
 }

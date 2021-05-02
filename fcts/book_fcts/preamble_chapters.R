@@ -1,29 +1,18 @@
 require(tidyverse)
-book.title <- 'Investindo na Renda Fixa'
+library(kableExtra)
+
+book.title <- 'Poupando e Investindo em Renda Fixa'
+book.subtitle <- 'Uma Abordagem Baseada em Dados'
+book.isbn.print <- '978-85-922435-9-3'
+book.isbn.ebook <- '978-85-922435-8-6'
+book.edition1.date <- '15/05/2019'
 
 my.sub.caption <- paste0(book.title, ' \uA9 Marcelo S. Perlin 2019')
 my.caption <- paste0('Dados obtidos junto ao Tesouro Nacional e BCB \n',
                      my.sub.caption)
 
-site.shiny <- 'https://www.msperlin.com/shiny/IRF/'
-
-my.theme <- function(my.size = 14) {
-  library(ggplot2)
-
-  my.sub.caption <- paste0(book.title, ' \uA9 Marcelo S. Perlin 2019')
-  my.caption <- paste0('Dados obtidos junto ao Tesouro Nacional e BCB \n',
-                       my.sub.caption)
-
-  my.theme <-  theme_bw(base_size = my.size) + #theme_linedraw(base_size = 14)
-    theme(legend.position = 'bottom',
-          legend.title = element_blank(),
-          #plot.caption = element_text(face = 'bold'),
-          legend.box.background = element_rect(),
-          legend.key.size = unit(2,"line"),
-          legend.key = element_rect(size = 3))
-
-  return(my.theme)
-
-}
+# sites
+site.shiny <- 'https://www.msperlin.com/shiny/PIRF/'
+site.code <- 'https://www.msperlin.com/blog/publication/2019_book-pirf/'
 
 #source('R fcts and scripts/Fcts_runitall.R')

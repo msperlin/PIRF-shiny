@@ -21,8 +21,8 @@ FRF_ <- function(input, output, session) {
                                      contract.duration = input$`PB_PB_1-select_expiration_pb`,
                                      value.first.buy = input$slider_first_invest_ammount, 
                                      value.monthly.buy = 0) %>%
-      mutate(CNPJ_FUNDO = asset.code,
-             type.asset = asset.code)
+      mutate(CNPJ_FUNDO = asset.code2,
+             type.asset = asset.code2)
     
     my.asset <-"Tesouro IPCA+ 2024"
     
@@ -32,24 +32,25 @@ FRF_ <- function(input, output, session) {
       mutate(ref.month = as.Date(format(ref.date, '%Y-%m-01'))) %>%
       group_by(ref.month, asset.code) %>%
       summarise_all(first)
+
     
-    df.invest.TD <- invest_TD(df.in = df.in,
+    df.invest.TD <- invest_TD(TD.to.invest = my.asset,
                               date.buy = first.date,
                               date.sell = last.date,
                               value.first.buy = input$slider_first_invest_ammount) %>%
-      mutate(CNPJ_FUNDO = asset.code,
-             type.asset = asset.code)
+      mutate(CNPJ_FUNDO = asset.code2,
+             type.asset = asset.code2)
     
     df.invest.poup <- invest_poup(date.buy = first.date,
                                   date.sell = last.date, 
                                   value.first.buy = input$slider_first_invest_ammount, 
                                   value.monthly.buy = 0) %>%
-      mutate(CNPJ_FUNDO = asset.code,
-             type.asset = asset.code)
+      mutate(CNPJ_FUNDO = asset.code2,
+             type.asset = asset.code2)
     
     #browser()
     df.to.plot <- bind_rows(bind_rows(df.invest.pb.1) %>%
-                              mutate(asset.code = paste0(asset.code, ' (', 
+                              mutate(asset.code = paste0(asset.code2, ' (', 
                                                          sapply(contract.duration,
                                                                 translate.duration), 
                                                          ')')),
@@ -112,19 +113,19 @@ FRF_ <- function(input, output, session) {
     
     my.asset <-"Tesouro IPCA+ 2024"
     df.invest.TD <- df.to.plot %>%
-      filter(asset.code == my.asset)
+      filter(asset.code2 == my.asset)
     
     p <- ggplot(df.funds.temp, aes(x = ref.date, y = port.net.value, group = CNPJ_FUNDO)) +
       geom_line(size = 0.07)  +
       geom_line(data = df.to.plot,
-                mapping = aes(x = ref.month, y = port.net.value, color = asset.code),
+                mapping = aes(x = ref.month, y = port.net.value, color = asset.code2),
                 size = 2) +
       geom_line(data = df.to.plot %>%
                   filter(asset.code == 'Caderneta de Poupança'),
-                mapping = aes(x = ref.month, y = port.net.value, color = asset.code),
+                mapping = aes(x = ref.month, y = port.net.value, color = asset.code2),
                 size = 2.5) +
       geom_line(data = df.invest.TD,
-                mapping = aes(x = ref.month, y = port.net.value, color = asset.code),
+                mapping = aes(x = ref.month, y = port.net.value, color = asset.code2),
                 size = 2.5) +
       geom_line(data = top_n_funds, aes(x = ref.month,
                                          y = port.net.value,
@@ -132,7 +133,7 @@ FRF_ <- function(input, output, session) {
                                          group = CNPJ_FUNDO),
                 size = 0.5) +
       labs(x = '',
-           y = 'Valores de Resgate para cada 1 R$ investido',
+           y = 'Valores Líquidos de Resgate',
            color = '',
            title = paste0('Desempenho de Longo Prazo de Fundos de Renda Fixa (', year(min(df.funds$ref.date)),
                           ' - ', year(max(df.funds$ref.date)), ')'),
@@ -215,8 +216,7 @@ FRF_ <- function(input, output, session) {
                              '- Dados contemplam apenas fundos de renda fixa que existiram durante todo o período analisado\n',
                              '- Para comparar os N maiores fundos contra os demais, utiliza-se uma média de retorno acumulado'),
            caption = paste0('Dados obtidos no Tesouro Nacional, BCB e Portal Brasileiro de Dados Abertos \n',
-                            'Criado em ', Sys.Date(), ' por Marcelo Perlin (marcelo.perlin@ufrgs.br)\n',
-                            'Compartilhado originalmente em www.bastter.com' )) +
+                            my.sub.caption)) +
       scale_y_continuous(labels = scales::percent) +
       scale_x_date(breaks = scales::pretty_breaks(12)) + 
       theme_bw()

@@ -4,9 +4,12 @@ TD_UI <- function(id, label = "TD")  {
   ns <- NS(id)
   unique.tickers <- unique(df.TD$asset.code2)
   
-  fluidPage(sidebarLayout(fluid = TRUE,
+  fluidPage(fluidRow(column(8,
+                     includeHTML('html_text/html_TD.html'))),
+            br(),
+            sidebarLayout(fluid = TRUE,
+                          
                           sidebarPanel(width = 2,
-                                       
                                        fluidRow(h3('Opções Tesouro Direto'),
                                                 selectInput(ns("select_td"), 
                                                             label = h5("Selecione Título"), 
@@ -30,16 +33,17 @@ TD_UI <- function(id, label = "TD")  {
                                        br(),
                                        fluidRow(PB_single_UI(ns('TD_PB_1')) ) ),
                           
-                          mainPanel(width = 8,
+                          mainPanel(width = 6,
                                     tabsetPanel(type = 'tabs', 
                                                 tabPanel('Gráfico',
-                                                         column(8,
                                                          plotOutput(ns('TD_plot_comp'), 
-                                                                    width = '100%', 
-                                                                    height = '500px') ) ),
+                                                                    #width = '100%', 
+                                                                    height = '750px'),
+                                                         br() #,
+                                                         #uiOutput(ns('TD_text_graph')) ) ,
+                                                ),
                                                 tabPanel('Tabela',
-                                                         column(8,
-                                                         tableOutput(ns('TD_tbl_td') ) ) )
+                                                         tableOutput(ns('TD_tbl_td') ) )
                                     ) 
                           ) 
   )

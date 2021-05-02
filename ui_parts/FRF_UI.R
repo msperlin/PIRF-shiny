@@ -3,7 +3,9 @@ FRF_UI <- function(id, label = "RF") {
   # Create a namespace function using the provided id
   ns <- NS(id)
   
-  fluidPage(
+  fluidPage(fluidRow(column(8,
+                            includeHTML('html_text/html_FRF.html'))),
+            br(),
     sidebarLayout(
       sidebarPanel(width = 2,
                    sliderInput(width = '100%',
@@ -15,7 +17,7 @@ FRF_UI <- function(id, label = "RF") {
                                value = 1000, pre = 'R$'),
                    checkboxInput(ns('check_box_IQ'),
                                  label = 'Incluir Fundos para Investidores Qualificados', 
-                                 value = FALSE),
+                                 value = TRUE),
                    sliderInput(width = '100%',
                                ns("slider_n_funds"), 
                                label = h5("Quantos fundos com maior número de cotistas a salientar"), 
@@ -26,19 +28,20 @@ FRF_UI <- function(id, label = "RF") {
                    br(),
                    h4('Produtos Bancários'),
                    PB_single_UI(ns('PB_PB_1'), title.panel = '' ) ), 
-      mainPanel(tabsetPanel(type = 'tabs', 
+      mainPanel(width = 6,
+                tabsetPanel(type = 'tabs', 
                             tabPanel('Gráfico 1',
-                                     column(8,
+
                                             h3('Comparação de Valores de Resgate'),
                                             plotOutput(ns('FRF_plot1'), 
-                                                       width = "110%", 
-                                                       height = "600px") ) ),
+                                                       #width = "100%", 
+                                                       height = "750px") ) ,
                             tabPanel('Gráfico 2',
-                                     column(8,
+
                                             h3('Performance Ano a Ano'),
                                             plotOutput(ns('FRF_plot2'), 
-                                                       width = "110%", 
-                                                       height = "600px") ))
+                                                       #width = "100%", 
+                                                       height = "750px") )
                             #tabPanel('Tabela',
                             #         column(8,
                             #                h3('Comparação de Valores de Resgate'),
